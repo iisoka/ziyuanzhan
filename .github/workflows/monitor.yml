@@ -2,7 +2,6 @@ name: Monitor & Deploy
 
 on:
   schedule:
-    # 每6小时运行一次（UTC时间）
     - cron: '0 */6 * * *'
   workflow_dispatch:
   push:
@@ -41,6 +40,43 @@ jobs:
       - name: Run monitor script
         run: |
           python monitor.py
+
+      - name: Generate MoonTVPlus subscription
+        run: |
+          python -c "
+          import json
+          from urllib.parse import urlparse
+          ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+          def b58e(data):
+              zeros = 0
+              for b in data:
+                  if b == 0: zeros += 1
+                  else: break
+              n = int.from_bytes(data, 'big')
+              r = []
+              while n > 0:
+                  n, m = divmod(n, 58)
+                  r.append(ALPHABET[m])
+              r.extend(['1'] * zeros)
+              return ''.join(reversed(r))
+          with open('docs/data/online.json') as f:
+              d = json.load(f)
+          sites = {}
+          for s in d['data']:
+              api = s.get('api', '')
+              if not api: continue
+              dom = urlparse(api).netloc
+              sites[dom] = {
+                  'name': '🎬' + s['name'],
+                  'api': 'https://liuiisok2.de5.net/?url=' + api,
+                  'detail': s.get('link', '')
+              }
+          cfg = {'cache_time': 7200, 'api_site': sites}
+          b58 = b58e(json.dumps(cfg, ensure_ascii=False).encode('utf-8'))
+          with open('docs/data/moontv_sub.json', 'w', newline='') as f:
+              f.write(b58)
+          print(f'Generated {len(sites)} sites, b58 length: {len(b58)}')
+          "
 
       - name: Clean old history files
         run: |
